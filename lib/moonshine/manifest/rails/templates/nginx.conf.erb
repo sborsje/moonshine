@@ -1,0 +1,92 @@
+user www-data www-data;
+worker_processes <%= configuration[:nginx][:worker_processes] %>;
+
+error_log  /opt/nginx/logs/error.log;
+pid        /var/run/nginx.pid;
+
+events {
+  worker_connections <%= configuration[:nginx][:worker_connections] %>;
+  use epoll;
+}
+
+http {
+  passenger_root <%= configuration[:passenger][:path] %>;
+  passenger_ruby /usr/bin/ruby;
+  passenger_log_level <%= configuration[:passenger][:log_level] || 0 %>;
+  passenger_user_switching <%= passenger_config_boolean(configuration[:passenger][:user_switching]) %>;
+  passenger_default_user <%= configuration[:passenger][:default_user] || configuration[:user] %>;
+  passenger_max_pool_size <%= configuration[:passenger][:max_pool_size] || 6 %>;
+  passenger_max_instances_per_app <%= configuration[:passenger][:max_instances_per_app] || 0 %>;
+  passenger_pool_idle_time <%= configuration[:passenger][:pool_idle_time] || 300 %>;
+
+  include /opt/nginx/conf/mime.types;
+
+  # set a default type for the rare situation that
+  # nothing matches from the mimie-type include
+  default_type application/octet-stream;
+
+  # This log format is compatible with any tool like awstats
+  # that can parse standard apache logs.
+  log_format main '$remote_addr - $remote_user [$time_local] '
+                  '"$request" $status $body_bytes_sent "$http_referer" '
+                  '"$http_user_agent" "$http_x_forwarded_for"' ;
+
+  # main access log
+  access_log  /var/log/nginx_access.log main;
+  # main error log
+  error_log  /var/log/nginx_error.log debug;
+
+  sendfile           on;
+
+  # sends the HTTP response headers in one packet.
+  tcp_nopush         on;
+  # disables the Nagle buffering algorithm.
+  tcp_nodelay        off;
+
+  keepalive_timeout  0;
+
+  # output compression saves bandwidth
+  gzip  on;
+  gzip_disable "MSIE [1-6]\.(?!.*SV1)";
+  gzip_http_version 1.0;
+  gzip_comp_level 2;
+  gzip_proxied any;
+  gzip_types text/plain text/css application/x-javascript text/xml application/xml application/xml+rss text/javascript;
+
+  server {
+    passenger_use_global_queue <%= passenger_config_boolean(configuration[:passenger][:use_global_queue]) %>;
+
+    # port to listen on. Can also be set to an IP:PORT
+    listen 80;
+
+    # Set the max size for file uploads to 50Mb
+    client_max_body_size 50M;
+
+    # sets the domain[s] that this vhost server requests for
+    server_name <%= configuration[:domain] || (Facter.to_hash["hostname"] + '.' + Facter.to_hash["domain"]) %>;
+
+    # vhost specific access log
+    access_log  <%= configuration[:deploy_to] %>/shared/log/nginx_access.log main;
+
+    # doc root
+    root   <%= configuration[:deploy_to] %>/current/public;
+
+    # serve static content directly
+    location ~* \.(ico|jpg|jpeg|gif|png|css|js|swf|html)$ {
+      if (-f $request_filename) {
+        expires max;
+        break;
+      }
+    }
+
+    # enable Phusion Passenger
+    passenger_enabled on;
+
+    # deny access to .htaccess files, if Apache's document root
+    # concurs with nginx's one
+    #
+    location ~ /\.ht {
+      deny  all;
+    }
+  }
+}

@@ -42,8 +42,14 @@ class Moonshine::Manifest::Rails < Moonshine::Manifest
   #
   # default_stack installs the database based on the adapter in database.yml for the rails environment
   def default_stack
-    recipe :apache_server
-    recipe :passenger_gem, :passenger_configure_gem_path, :passenger_apache_module, :passenger_site
+    case configuration[:webserver]
+    when 'nginx'
+      recipe :passenger_gem, :passenger_configure_gem_path, :passenger_nginx_module
+    else
+      recipe :apache_server
+      recipe :passenger_gem, :passenger_configure_gem_path, :passenger_apache_module, :passenger_site
+    end
+
     case database_environment[:adapter]
     when 'mysql'
       recipe :mysql_server, :mysql_gem, :mysql_database, :mysql_user, :mysql_fixup_debian_start

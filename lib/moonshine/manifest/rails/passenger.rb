@@ -1,4 +1,11 @@
 module Moonshine::Manifest::Rails::Passenger
+  def self.included(manifest)
+    manifest.configure :nginx => {
+      :worker_processes => 4,
+      :worker_connections => 1024
+    }
+  end
+
   # Install the passenger gem
   def passenger_gem
     configure(:passenger => {})
@@ -50,6 +57,41 @@ module Moonshine::Manifest::Rails::Passenger
       :alias => "passenger_conf"
 
     a2enmod 'passenger', :require => [exec("build_passenger"), file("passenger_conf"), file("passenger_load")]
+  end
+
+  # Build, install, and enable the passenger nginx module. Please see the
+  # <tt>passenger.conf.erb</tt> template for passenger configuration options.
+  def passenger_nginx_module
+    exec "build_nginx",
+      :command => "sudo passenger-install-nginx-module --auto --auto-download --prefix=/opt/nginx",
+      :unless => "ls /opt/nginx/sbin/nginx",
+      :require => package("passenger")
+
+    file "/etc/init.d/nginx",
+      :ensure => :present,
+      :content => template(File.join(File.dirname(__FILE__), "templates", "nginx.init.erb"), binding),
+      :mode => "744",
+      :require => exec("build_nginx")
+
+    exec "autostart_nginx",
+      :command => "sudo /usr/sbin/update-rc.d -f nginx defaults",
+      :unless => "ls -l /etc/rc?.d/*nginx",
+      :require => file("/etc/init.d/nginx")
+
+    file "/opt/nginx/conf/nginx.conf",
+      :ensure => :present,
+      :content => template(File.join(File.dirname(__FILE__), "templates", "nginx.conf.erb")),
+      :require => exec("build_nginx"),
+      :mode => "644",
+      :notify => service("nginx")
+
+    service "nginx",
+      :ensure => :running,
+      :enable => true,
+      :require => [
+        exec("build_nginx"),
+        file("/etc/init.d/nginx")
+      ]
   end
 
   # Creates and enables a vhost configuration named after your application.

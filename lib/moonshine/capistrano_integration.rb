@@ -14,6 +14,7 @@ module Moonshine
         set :scm, :git
         set :git_enable_submodules, 1
         set :keep_releases, 5
+        set :webserver, 'apache'
         ssh_options[:paranoid] = false
         ssh_options[:forward_agent] = true
         default_run_options[:pty] = true
@@ -322,7 +323,10 @@ module Moonshine
           task :upgrade do
             install
             sudo 'gem pristine --all'
-            apache.restart
+            case fetch(:webserver).to_s
+              when 'nginx' then nginx.restart
+              else apache.restart
+            end
           end
 
           desc 'Install Ruby + Rubygems'
@@ -417,6 +421,13 @@ module Moonshine
           desc 'Restarts the Apache web server'
           task :restart do
             sudo 'service apache2 restart'
+          end
+        end
+
+        namespace :nginx do
+          desc 'Restarts the Nginx web server'
+          task :restart do
+            sudo 'service nginx restart'
           end
         end
 
