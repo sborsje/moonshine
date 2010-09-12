@@ -65,6 +65,9 @@ http {
     # sets the domain[s] that this vhost server requests for
     server_name <%= configuration[:domain] || (Facter.to_hash["hostname"] + '.' + Facter.to_hash["domain"]) %>;
 
+    # Rails environment
+    rails_env <%= configuration[:passenger][:rails_env] || ENV['RAILS_ENV'] || 'production' %>
+
     # vhost specific access log
     access_log  <%= configuration[:deploy_to] %>/shared/log/nginx_access.log main;
 
